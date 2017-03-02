@@ -1,0 +1,468 @@
+#!/usr/bin/perl -s
+
+use strict;
+use warnings;
+use Tk;
+use PDF::Reuse;
+use PDF::Reuse::Barcode;
+
+#*****	USE THIS TO ADJUST LABEL   **************
+# The bottom left corner of the page is X=0,Y=0
+# The upper right corner of the page is X=530,Y=840
+# MYX = left to right position (both labels)
+# MYTOPY = top label up to down position
+# MYBOTY = bottom label up to down position
+use constant MYX => 80;
+use constant MYTOPY => 720;
+use constant MYBOTY => 365;
+
+#*****	Base variables	*************************
+our $debug;
+my $isbn = '';
+my ($title, $author, $coa, $batch, $ppon, $qty, $wgt);
+my ($adjusted_wgt, $adjusted_price, $adjusted_isbn);
+my ($can_price, $GTIN, $hr_price);
+my $pdf_output_file = 'BISAC_Carton_Label.pdf';
+
+# TODO CHANGE THIS!!! ****
+my $publisher = "YourNameHere";
+# TODO CHANGE THAT!!! ****
+
+my $message = "Ready to begin...";
+
+# AI SETTINGS *********************************************
+my $PPON_AI = "251";
+my $QTY_AI = "30";
+my $WGT_AI = "3401";
+my $PRICE_AI = "9012Q";
+my $GTIN_AI = "01";
+# *********************************************************
+
+#*****	Tk Starts HERE   ************************
+$debug and print "Starting program\n";
+my $window = MainWindow->new;
+$window->title("Carton Label Maker");
+$window->geometry("550x350+50+50");
+my $banner_font = $window->fontCreate("banner",-family=>'verdana',-size=>18,-weight=>"bold");
+my $normal_font = $window->fontCreate("normal",-family=>'verdana',-size=>14);
+my $button_font = $window->fontCreate("buttonfont",-family=>'courier',-size=>12,-weight=>'bold');
+my $tiny_font   = $window->fontCreate("smallest",-family=>'verdana',-size=>8);
+
+my $banner = $window->Label(-text=>"Carton Label Maker",-pady=>5,-font=>"banner")->pack;
+
+#*****	Top Frame  ******************************
+my $tf = $window->Frame()->pack(-expand=>1,-fill=>"both");
+
+$tf->Label(-text=>"Title: ")->grid(-row=>0,-column=>1);
+my $title_entry = $tf->Entry(-textvariable=>\$title,-font=>"normal",-bg=>"white",-width=>30,-justify=>"left")->grid(-row=>0,-column=>2,-columnspan=>3,-sticky=>"nw");
+$tf->Label(-text=>"Author: ")->grid(-row=>1,-column=>1);
+my $author_entry = $tf->Entry(-textvariable=>\$author,-font=>"normal",-bg=>"white",-width=>30,-justify=>"left")->grid(-row=>1,-column=>2,-columnspan=>3,-sticky=>"nw");
+$tf->Label(-text=>"Country: ")->grid(-row=>2,-column=>1);
+my $coa_entry = $tf->Entry(-textvariable=>\$coa,-font=>"normal",-bg=>"white",-width=>15,-justify=>"right")->grid(-row=>2,-column=>2,-sticky=>"nw");
+$tf->Label(-text=>"PPON: ")->grid(-row=>2,-column=>3);
+my $ppon_entry = $tf->Entry(-textvariable=>\$ppon,-font=>"normal",-bg=>"white",-width=>10,-justify=>"right")->grid(-row=>2,-column=>4,-sticky=>"nw");
+$tf->Label(-text=>"ISBN: ")->grid(-row=>3,-column=>1);
+my $isbn_entry = $tf->Entry(-textvariable=>\$isbn,-font=>"normal",-bg=>"white",-width=>14,-justify=>"right")->grid(-row=>3,-column=>2,-sticky=>"nw");
+$tf->Label(-text=>"Batch: ")->grid(-row=>3,-column=>3);
+my $batch_entry = $tf->Entry(-textvariable=>\$batch,-font=>"normal",-bg=>"white",-width=>11,-justify=>"right")->grid(-row=>3,-column=>4,-sticky=>"nw");
+$tf->Label(-text=>"No Dashes in ISBN")->grid(-row=>4,-column=>2);
+$tf->Label(-text=>"999/999R Format")->grid(-row=>4,-column=>4);
+$tf->Label(-text=>"Carton QTY: ")->grid(-row=>5,-column=>1);
+my $qty_entry = $tf->Entry(-textvariable=>\$qty,-font=>"normal",-bg=>"white",-width=>5,-justify=>"right")->grid(-row=>5,-column=>2,-sticky=>"nw");
+$tf->Label(-text=>"Carton WGT: ")->grid(-row=>5,-column=>3);
+my $wgt_entry = $tf->Entry(-textvariable=>\$wgt,-font=>"normal",-bg=>"white",-width=>5,-justify=>"right")->grid(-row=>5,-column=>4,-sticky=>"nw");
+
+
+#*****	Bottom Frame  ***************************
+my $bf = $window->Frame()->pack(-expand=>1,-fill=>"both");
+
+my $create_button = $bf->Button(-text=>"Create PDF",-command=>\&create,-background=>"green",-activebackground=>"#66FF66",-font=>'buttonfont')->grid(-row=>1,-column=>1);
+$bf->Label(-text=>"  ")->grid(-row=>1,-column=>2);
+my $clear_button = $bf->Button(-text=>"CLEAR",-command=>\&clear,-background=>"#33CC00",-activebackground=>"#66FF66",-font=>'buttonfont')->grid(-row=>1,-column=>3);
+$bf->Label(-text=>"  ")->grid(-row=>1,-column=>4);
+my $p_button = $bf->Button(-text=>"Exit",-command=>\&done,-background=>"#EE7711",-activebackground=>"#EE8822",-font=>'buttonfont')->grid(-row=>1,-column=>5);
+
+#*****	Status Bar	*****************************
+$window->Label(-textvariable=>\$message, -borderwidth=>2, -relief=>'groove')->pack(-fill=>'x',-side=>'bottom');
+
+$title_entry->focus();
+MainLoop;
+
+#*****	Clear form  *****************************
+sub clear {
+  $debug and print "Clearing form at user request\n";
+  $title = '';
+  $author = '';
+  $coa = '';
+  $ppon = '';
+  $isbn = '';
+  $batch = '';
+  $qty = '';
+  $wgt = '';
+  undef $adjusted_price;
+  undef $adjusted_wgt;
+  undef $hr_price;
+  undef $adjusted_isbn;
+  undef $can_price;
+  undef $GTIN;
+  $title_entry->focus();
+  $message = "Form cleared, ready to begin..."
+}
+
+#*****	Adjust BATCH to PRICE
+sub fix_price {
+  $can_price = '';
+  $batch = uc($batch);
+  # 0795R
+  if ($batch =~ /^(\d?\d\d\d)R$/) {
+    return $1;
+  }
+  # 0795/0895R
+  if ($batch =~ /(\d?\d\d\d)\/(\d?\d\d\d)R/) {
+	$can_price = $2;
+    return $1;
+  }
+  $debug and print "No viable PRICE found, defaulting to ZERO\n";
+  $message = 'Not a good BATCH, resorting to $0.00';
+  return '0';
+}
+
+#*****	Make the PDF   **************************
+sub create {
+# TODO stop if invalid data
+  $debug and print "Creating PDF\n";
+  # Fix PRICE/BATCH
+  $adjusted_price = fix_price();
+  $hr_price = '$' . sprintf("%.2f",$adjusted_price/100) . " USD";
+  if ($can_price) {
+    $hr_price = $hr_price . ' / $' . sprintf("%.2f",$can_price/100) . ' CAD';
+  }
+  $adjusted_price .= 'USD';
+  # Fix GTIN
+  $GTIN = validate_isbn();
+  return 0 unless $GTIN > 0;
+  # Fix WGT
+  $message = 'Enter a weight' unless $wgt;
+  return 0 unless $wgt;
+  $wgt =~ s/\s+//g;
+  $adjusted_wgt = $wgt;
+  $adjusted_wgt *= 10;
+  $adjusted_wgt = sprintf("%06d", $adjusted_wgt);
+
+  $debug and print "P: $adjusted_price -- $hr_price\n";
+  $debug and print "W: $adjusted_wgt\n";
+  $pdf_output_file = $window->getSaveFile(-initialfile=>'BISAC_Carton_Label.pdf');
+  if (defined $pdf_output_file) {
+    $debug and print "Saving to $pdf_output_file, starting REUSE\n";
+    $message = "Carton Label saved as $pdf_output_file";
+    make_pdf();
+  }
+  else {
+    $debug and print "User cancelled out of save dialog\n";
+  }
+
+}
+
+#*****	Validate ISBN   *************************
+sub validate_isbn {
+#TODO strip out dashes, too.
+  $isbn =~ s/\s+//;
+  if ($isbn !~ /^\d{13}$/) {
+    $debug and print "Not a valid ISBN\n";
+    $message = 'Not a good ISBN, I refuse to cooperate!';
+	return 0;
+  }
+  else {
+    $debug and print "ISBN: Working with $isbn\n";
+    my $GTIN = '1' . $isbn;
+    chop ($GTIN);
+    $GTIN .= checksum($GTIN);
+    $debug and print "GTIN: Working with $GTIN\n";
+    return $GTIN;
+  }
+}
+
+
+#*****	GTIN-14 Checksum    *********************
+sub checksum() {
+  my $data = shift;
+  my $is_even = 0;
+  my $subtotal = 0;
+  for my $d (split //, $data) {
+    if (!$is_even) {
+	  $d = $d*3;
+      $is_even = 1;
+    }
+    else {
+      $is_even = 0;
+    }
+  $subtotal += $d;
+  }
+  my $checkdigit = $subtotal % 10;
+  $checkdigit = 10-$checkdigit;
+  if ($checkdigit == 10) {
+    $checkdigit = 0;
+  }
+  return $checkdigit;
+}
+
+#*****	Write data to the PDF     ***************
+sub make_pdf {
+prFile($pdf_output_file);
+prFont('H');
+
+  # Title Text
+  prFontSize(14);
+  prText(MYX,MYTOPY,"TITLE:");
+  prText(MYX,MYBOTY,'TITLE:');
+  prText(MYX+70,MYTOPY,uc($title));
+  prText(MYX+70,MYBOTY,uc($title));
+ 
+  # Main Text
+  prFontSize(12);
+    # Author
+  prText(MYX,MYTOPY-15,"AUTHOR:");
+  prText(MYX,MYBOTY-15,"AUTHOR:");
+  prText(MYX+70,MYTOPY-15,uc($author));
+  prText(MYX+70,MYBOTY-15,uc($author));
+    # Publisher
+  prText(MYX,MYTOPY-30,"PUBLISHER: $publisher");
+  prText(MYX,MYBOTY-30,"PUBLISHER: $publisher");
+    # Country
+  prText(MYX+260,MYTOPY-34,"PRINTED IN ");
+  prText(MYX+260,MYBOTY-34,"PRINTED IN ");
+  prText(MYX+335,MYTOPY-34,uc($coa));
+  prText(MYX+335,MYBOTY-34,uc($coa));
+    # ISBN
+  prText(MYX,MYTOPY-63,'ISBN:');
+  prText(MYX,MYBOTY-63,'ISBN:');
+  prText(MYX+35,MYTOPY-63,$isbn);
+  prText(MYX+35,MYBOTY-63,$isbn);
+    # Batch
+  prText(MYX,MYTOPY-83,"BATCH:");
+  prText(MYX,MYBOTY-83,"BATCH:");
+  prText(MYX+47,MYTOPY-83,$batch);
+  prText(MYX+47,MYBOTY-83,$batch);
+    # PPON
+  prText(MYX+300,MYTOPY-63,"PPON:");
+  prText(MYX+300,MYBOTY-63,"PPON:");
+  prText(MYX+340,MYTOPY-63,$ppon);
+  prText(MYX+340,MYBOTY-63,$ppon);
+    # Cover Price, Switching fonts to save space
+  prText(MYX+210,MYTOPY-190,"COVER PRICE:");
+  prText(MYX+210,MYBOTY-190,"COVER PRICE:");
+  prFont('TR');
+  prText(MYX+300,MYTOPY-190,$hr_price);
+  prText(MYX+300,MYBOTY-190,$hr_price);
+  prFont('H');
+  # re-add dashes to ISBN-13 field
+  prText(MYX,MYTOPY-190,"ISBN:");
+  prText(MYX,MYBOTY-190,"ISBN:");
+    my @broke = split(//,$isbn);
+  prText(MYX+70,MYTOPY-190,sprintf ("%s%s%s-%s-%s%s%s%s%s-%s%s%s-%s",@broke));
+  prText(MYX+70,MYBOTY-190,sprintf ("%s%s%s-%s-%s%s%s%s%s-%s%s%s-%s",@broke));
+    # QTY
+  prText(MYX,MYTOPY-124,"CTN QTY:");
+  prText(MYX,MYBOTY-124,"CTN QTY:");
+  prText(MYX+80,MYTOPY-124,$qty);
+  prText(MYX+80,MYBOTY-124,$qty);
+    # WGT
+  prText(MYX+250,MYTOPY-124,"CTN WGT:");
+  prText(MYX+250,MYBOTY-124,"CTN WGT:");
+  prText(MYX+320,MYTOPY-124,sprintf("%.1f",$wgt) . ' LBS');
+  prText(MYX+320,MYBOTY-124,sprintf("%.1f",$wgt) . ' LBS');
+
+  # HR Text (sub barcode)
+  prFontSize(10);
+  prText(MYX+15,MYTOPY-240,"($GTIN_AI) $GTIN");
+  prText(MYX+15,MYBOTY-240,"($GTIN_AI) $GTIN");
+  prText(MYX+316,MYTOPY-100,"($PPON_AI) $ppon");
+  prText(MYX+316,MYBOTY-100,"($PPON_AI) $ppon");
+  prText(MYX+14,MYTOPY-170,"($QTY_AI) $qty");
+  prText(MYX+14,MYBOTY-170,"($QTY_AI) $qty");
+  prText(MYX+260,MYTOPY-170,"($WGT_AI) $adjusted_wgt");
+  prText(MYX+260,MYBOTY-170,"($WGT_AI) $adjusted_wgt");
+  prText(MYX+226,MYTOPY-240,"($PRICE_AI) $adjusted_price");
+  prText(MYX+226,MYBOTY-240,"($PRICE_AI) $adjusted_price");
+
+  # Barcode EAN
+  prFontSize(14);
+  prFont('HB');
+  prText(MYX+170,MYTOPY-61,'BARCODE');
+  prFontSize(35);
+  prText(MYX+170,MYTOPY-89,"EAN");
+  prFontSize(14);
+  prFont('HB');
+  prText(MYX+170,MYBOTY-61,'BARCODE');
+  prFontSize(35);
+  prText(MYX+170,MYBOTY-89,"EAN");
+
+
+  # Lines - box around each label made up of 4 connected lines
+    # Top Box
+  prAdd('q ' . (MYX-5) . ' ' . (MYTOPY+20) . ' m ' . (MYX+440) . ' ' . (MYTOPY+20) . ' l S Q');
+  prAdd('q ' . (MYX-5) . ' ' . (MYTOPY+20) . ' m ' . (MYX-5) . ' ' . (MYTOPY-260) . ' l S Q');
+  prAdd('q ' . (MYX-5) . ' ' . (MYTOPY-260) . ' m ' . (MYX+440) . ' ' . (MYTOPY-260) . ' l S Q');
+  prAdd('q ' . (MYX+440) . ' ' . (MYTOPY-260) . ' m ' . (MYX+440) . ' ' . (MYTOPY+20) . ' l S Q');
+    # Bottom Box
+  prAdd('q ' . (MYX-5) . ' ' . (MYBOTY+20) . ' m ' . (MYX+440) . ' ' . (MYBOTY+20) . ' l S Q');
+  prAdd('q ' . (MYX-5) . ' ' . (MYBOTY+20) . ' m ' . (MYX-5) . ' ' . (MYBOTY-260) . ' l S Q');
+  prAdd('q ' . (MYX-5) . ' ' . (MYBOTY-260) . ' m ' . (MYX+440) . ' ' . (MYBOTY-260) . ' l S Q');
+  prAdd('q ' . (MYX+440) . ' ' . (MYBOTY-260) . ' m ' . (MYX+440) . ' ' . (MYBOTY+20) . ' l S Q');
+   # Segment Breaks
+  prAdd('q ' . (MYX-5) . ' ' . (MYTOPY-44) . ' m ' . (MYX+440) . ' ' . (MYTOPY-44) . ' l S Q');
+  prAdd('q ' . (MYX-5) . ' ' . (MYBOTY-44) . ' m ' . (MYX+440) . ' ' . (MYBOTY-44) . ' l S Q');
+  prAdd('q ' . (MYX-5) . ' ' . (MYTOPY-110) . ' m ' . (MYX+440) . ' ' . (MYTOPY-110) . ' l S Q');
+  prAdd('q ' . (MYX-5) . ' ' . (MYBOTY-110) . ' m ' . (MYX+440) . ' ' . (MYBOTY-110) . ' l S Q');
+
+
+
+  ## GTIN14
+  PDF::Reuse::Barcode::Code128(x     => MYX+5,
+                               y     => MYTOPY-240,
+                               value => chr(0xf7) . $GTIN_AI . $GTIN,
+                               text  => 0,
+	                           size  => 1.3,
+                               drawBackground => 0,
+							   prolong => 1.5 );
+  PDF::Reuse::Barcode::Code128(x     => MYX+5,
+                               y     => MYBOTY-240,
+                               value => chr(0xf7) . $GTIN_AI . $GTIN,
+                               text  => 0,
+	                           size  => 1.3,
+                               drawBackground => 0,
+							   prolong => 1.5 );
+
+
+
+  # PPON
+  PDF::Reuse::Barcode::Code128(x     => MYX+305,
+                               y     => MYTOPY-101,
+                               value => chr(0xf7) . $PPON_AI . $ppon,
+                               text  => 0,
+							   size  => 1.2,
+							   drawBackground => 0 );
+  PDF::Reuse::Barcode::Code128(x     => MYX+305,
+                               y     => MYBOTY-101,
+                               value => chr(0xf7) . $PPON_AI . $ppon,
+                               text  => 0,
+							   size  => 1.2,
+							   drawBackground => 0 );
+
+# QTY
+  PDF::Reuse::Barcode::Code128(x     => MYX+4,
+                               y     => MYTOPY-170,
+                               value => chr(0xf7) . $QTY_AI . $qty,
+                               text  => 0,
+							   size  => 1.2,
+							   drawBackground => 0,
+							   prolong => 1.5 );
+  PDF::Reuse::Barcode::Code128(x     => MYX+4,
+                               y     => MYBOTY-170,
+                               value => chr(0xf7) . $QTY_AI . $qty,
+                               text  => 0,
+							   size  => 1.2,
+							   drawBackground => 0,
+							   prolong => 1.5 );
+
+# WGT
+  PDF::Reuse::Barcode::Code128(x     => MYX+250,
+                               y     => MYTOPY-170,
+                               value => chr(0xf7) . $WGT_AI . $adjusted_wgt,
+                               text  => 0,
+							   size  => 1.2,
+							   drawBackground => 0,
+							   prolong => 1.5 );
+  PDF::Reuse::Barcode::Code128(x     => MYX+250,
+                               y     => MYBOTY-170,
+                               value => chr(0xf7) . $WGT_AI . $adjusted_wgt,
+                               text  => 0,
+							   size  => 1.2,
+							   drawBackground => 0,
+							   prolong => 1.5 );
+
+# PRICE
+  PDF::Reuse::Barcode::Code128(x     => MYX+215,
+                               y     => MYTOPY-240,
+                               value => chr(0xf7) . $PRICE_AI . $adjusted_price,
+                               text  => 0,
+							   size  => 1.3,
+							   drawBackground => 0,
+							   prolong => 1.5 );
+  PDF::Reuse::Barcode::Code128(x     => MYX+215,
+                               y     => MYBOTY-240,
+                               value => chr(0xf7) . $PRICE_AI . $adjusted_price,
+                               text  => 0,
+							   size  => 1.3,
+							   drawBackground => 0,
+							   prolong => 1.5 );
+
+prEnd ();
+
+
+}
+
+#***** 	Quit 	*********************************
+sub done {
+  $debug and print "Exiting at user request\n";
+  exit 0;
+}
+
+=head1 Name
+
+  cartonlabel (standalone)
+
+=head1 Synopsys
+
+  Generate a BISAC (or BISG) carton label
+
+=head2 Required Modules
+
+=over 4
+
+=item *
+B<perl-tk>
+Tk -- available from CPAN, but it's much easier to install using a package manager like C<sudo apt-get install perl-tk>.  If using Activestate Perl (on Windows) note that Tkx is installed, but this program requires pure Tk.  It may not be available in your version of Activestate.  OSX requires some extra tinkering to get a working X window to draw in - but it should prompt the user to install those parts as needed.
+
+=item * 
+B<PDF::Reuse>
+This adds the data to the PDF form.  It uses three main font sizes, 14, 12, and 10, as noted in most guidelines.  
+
+=item *
+B<PDF::Reuse::Barcode>
+This is what creates the barcodes to insert into the PDF.  It can do several kinds, but the label only needs CODE128 provided by B<Barcode::Code128>.  It won't export the 'FNC1' properly, however, so 'chr(0x07)' is used instead.  The author of PDF::Reuse::Barcode seemed shocked that anyone would need that...
+
+=back
+
+=head2 Notes
+
+The ISBN is converted into a GTIN by adding a 1, chopping off the last digit, and making a new checksum.  The price should be entered in as a batch (that may be specific to our partner), so $8.95 should be entered as 895R.  If it has a CAN price, it would be 895/995R.  However, only the US price is encoded in the barcode.  Add '-debug' to the command line to see some (kind-of) useful information about what's going on behind the scenes.
+
+=head3 TODO
+
+Validate input on entry to catch errors.  Add adjustments for generic usage.
+
+=head2 Author
+
+  Anthony Burbank, 2016
+
+=head1 License
+
+Copyright (C) <2016>  <Anthony Burbank>
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
+=cut
+
