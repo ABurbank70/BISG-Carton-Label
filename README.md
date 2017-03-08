@@ -14,3 +14,5 @@ This may contain specific parts for a certain Distribution house and require adj
 This generates a single page PDF with two 4x6 carton labels (hopefully, BISG compliant).  The barcodes are Code128 C (except for Price, it has a letter in it) and include a 'FNC1' character.
 
 You can see the complete specifications here: http://bisg.org/page/Guides
+
+See the wiki for more detailed information https://github.com/ABurbank70/BISG-Carton-Label/wiki
