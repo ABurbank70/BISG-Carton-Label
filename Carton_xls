@@ -67,6 +67,7 @@ for my $row (1 .. $row_max) {
     # Remove any padding
     $data =~ s/^\s+//;
     $data =~ s/\s+$//;
+    $data =~ s/\x{2019}/'/g;	#remove RIGHT SINGLE QUOTATION MARK
     switch($col) {
 	  case 0 { $title = $data}
 	  case 1 { $author = $data}
