@@ -199,6 +199,7 @@ sub checksum() {
 #*****	Write data to the PDF     ***************
 sub make_pdf {
 prFile($pdf_output_file);
+prMbox(0,0,612,792);
 prFont('H');
 
   # Title Text
