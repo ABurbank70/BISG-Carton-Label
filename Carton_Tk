@@ -21,7 +21,7 @@ our $debug;
 my $isbn = '';
 my ($title, $author, $coa, $batch, $ppon, $qty, $wgt);
 my ($adjusted_wgt, $adjusted_price, $adjusted_isbn);
-my ($can_price, $GTIN, $hr_price);
+my ($can_price, $GTIN, $hr_price, $png);
 my $pdf_output_file = 'BISAC_Carton_Label.pdf';
 
 # TODO CHANGE THIS!!! ****
@@ -71,7 +71,7 @@ $tf->Label(-text=>"Carton QTY: ")->grid(-row=>5,-column=>1);
 my $qty_entry = $tf->Entry(-textvariable=>\$qty,-font=>"normal",-bg=>"white",-width=>5,-justify=>"right")->grid(-row=>5,-column=>2,-sticky=>"nw");
 $tf->Label(-text=>"Carton WGT: ")->grid(-row=>5,-column=>3);
 my $wgt_entry = $tf->Entry(-textvariable=>\$wgt,-font=>"normal",-bg=>"white",-width=>5,-justify=>"right")->grid(-row=>5,-column=>4,-sticky=>"nw");
-
+$tf->Checkbutton(-text=>"Also Create PNG image of PDF",-variable=>\$png,-relief=>'flat')->grid(-row=>6,-column=>1,-columnspan=>4);
 
 #*****	Bottom Frame  ***************************
 my $bf = $window->Frame()->pack(-expand=>1,-fill=>"both");
@@ -399,6 +399,12 @@ prFont('H');
 							   prolong => 1.5 );
 
 prEnd ();
+
+if ($png) {
+  $debug and print "Converting PDF into PNG... this may take a little bit\n";
+  $message = "Creating PNG..";
+  `convert -colorspace RGB -interlace none -density 300 -quality 100 -flatten ${pdf_output_file} ${pdf_output_file}.png`;
+}
 
 
 }
