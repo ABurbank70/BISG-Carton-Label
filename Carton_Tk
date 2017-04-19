@@ -277,8 +277,8 @@ prFont('H');
   prFontSize(10);
   prText(MYX+15,MYTOPY-240,"($GTIN_AI) $GTIN");
   prText(MYX+15,MYBOTY-240,"($GTIN_AI) $GTIN");
-  prText(MYX+316,MYTOPY-100,"($PPON_AI) $ppon");
-  prText(MYX+316,MYBOTY-100,"($PPON_AI) $ppon");
+  prText(MYX+300,MYTOPY-100,"($PPON_AI) $ppon");
+  prText(MYX+300,MYBOTY-100,"($PPON_AI) $ppon");
   prText(MYX+14,MYTOPY-170,"($QTY_AI) $qty");
   prText(MYX+14,MYBOTY-170,"($QTY_AI) $qty");
   prText(MYX+260,MYTOPY-170,"($WGT_AI) $adjusted_wgt");
@@ -337,13 +337,13 @@ prFont('H');
 
 
   # PPON
-  PDF::Reuse::Barcode::Code128(x     => MYX+305,
+  PDF::Reuse::Barcode::Code128(x     => MYX+260,
                                y     => MYTOPY-101,
                                value => chr(0xf7) . $PPON_AI . $ppon,
                                text  => 0,
 							   size  => 1.2,
 							   drawBackground => 0 );
-  PDF::Reuse::Barcode::Code128(x     => MYX+305,
+  PDF::Reuse::Barcode::Code128(x     => MYX+260,
                                y     => MYBOTY-101,
                                value => chr(0xf7) . $PPON_AI . $ppon,
                                text  => 0,
