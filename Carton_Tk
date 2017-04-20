@@ -105,6 +105,7 @@ sub clear {
   undef $adjusted_isbn;
   undef $can_price;
   undef $GTIN;
+  undef $png;
   $title_entry->focus();
   $message = "Form cleared, ready to begin..."
 }
