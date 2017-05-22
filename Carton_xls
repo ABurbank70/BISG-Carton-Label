@@ -13,9 +13,9 @@ use Switch;
 # MYX = left to right position (both labels)
 # MYTOPY = top label up to down position
 # MYBOTY = bottom label up to down position
-use constant MYX => 80;
+use constant MYX => 90;
 use constant MYTOPY => 720;
-use constant MYBOTY => 365;
+use constant MYBOTY => 315;
 
 #*****	Base variables	*************************
 our $debug;
