@@ -207,16 +207,16 @@ prCompress(1);
   prFontSize(14);
   prText(MYX,MYTOPY,"TITLE:");
   prText(MYX,MYBOTY,'TITLE:');
-  prText(MYX+70,MYTOPY,uc($title));
-  prText(MYX+70,MYBOTY,uc($title));
+  prText(MYX+50,MYTOPY,uc($title));
+  prText(MYX+50,MYBOTY,uc($title));
  
   # Main Text
   prFontSize(12);
     # Author
   prText(MYX,MYTOPY-15,"AUTHOR:");
   prText(MYX,MYBOTY-15,"AUTHOR:");
-  prText(MYX+70,MYTOPY-15,uc($author));
-  prText(MYX+70,MYBOTY-15,uc($author));
+  prText(MYX+65,MYTOPY-15,uc($author));
+  prText(MYX+65,MYBOTY-15,uc($author));
     # Publisher
   prText(MYX,MYTOPY-30,"PUBLISHER: $publisher");
   prText(MYX,MYBOTY-30,"PUBLISHER: $publisher");
