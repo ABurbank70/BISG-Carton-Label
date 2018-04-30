@@ -25,6 +25,8 @@ my ($adjusted_wgt, $adjusted_price, $adjusted_isbn);
 my ($can_price, $GTIN, $hr_price, $png);
 my $pdf_output_file = 'BISAC_Carton_Label.pdf';
 
+# If you have more then one imprint, you can add them to 
+# @pub_list. $publisher should point to the default choice
 # TODO CHANGE THIS!!! ****
 my $publisher = "YourNameHere";
 my @pub_list = ("YourNameHere", "OrThisNameInstead");
