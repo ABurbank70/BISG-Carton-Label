@@ -50,7 +50,7 @@ my $GTIN_AI = "01";
 $debug and print "Starting program\n";
 my $window = MainWindow->new;
 $window->title("Carton Label Maker");
-$window->geometry("550x350+50+50");
+$window->geometry("550x370+70+70");
 my $banner_font = $window->fontCreate("banner",-family=>'verdana',-size=>18,-weight=>"bold");
 my $normal_font = $window->fontCreate("normal",-family=>'verdana',-size=>14);
 my $button_font = $window->fontCreate("buttonfont",-family=>'courier',-size=>12,-weight=>'bold');
