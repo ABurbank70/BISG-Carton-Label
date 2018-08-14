@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 use Tk;
-use Tk::Optionmenu;
+
 use PDF::Reuse;
 use PDF::Reuse::Barcode;
 
@@ -17,21 +17,25 @@ use constant MYX => 90;
 use constant MYTOPY => 720;
 use constant MYBOTY => 315;
 
-#*****	Base variables	*************************
-our $debug;
-my $isbn = '';
-my ($title, $author, $coa, $batch, $ppon, $qty, $wgt);
-my ($adjusted_wgt, $adjusted_price, $adjusted_isbn);
-my ($can_price, $GTIN, $hr_price, $png);
-my $pdf_output_file = 'BISAC_Carton_Label.pdf';
+
 
 # If you have more then one imprint, you can add them to 
 # @pub_list. $publisher should point to the default choice
 # TODO CHANGE THIS!!! ****
 my $publisher = "YourNameHere";
-my @pub_list = ("YourNameHere", "OrThisNameInstead");
+my @pub_list = ("YourNameHere", "OrThisNameInstead","OrTheOneWeDontUseAnymore");
 # TODO CHANGE THAT!!! ****
 
+
+
+#*****	Base variables	*************************
+our $debug;
+my $isbn = '';
+my ($title, $author, $coa, $batch, $ppon, $qty, $wgt);
+my ($adjusted_wgt, $adjusted_price, $adjusted_isbn);
+my ($can_price, $GTIN, $hr_price,$png, $row);
+my $isbn_format = 0;
+my $pdf_output_file = 'BISAC_Carton_Label.pdf';
 my $message = "Ready to begin...";
 
 # AI SETTINGS *********************************************
@@ -56,28 +60,37 @@ my $banner = $window->Label(-text=>"Carton Label Maker",-pady=>5,-font=>"banner"
 
 #*****	Top Frame  ******************************
 my $tf = $window->Frame()->pack(-expand=>1,-fill=>"both");
+$row = 0;
 
-$tf->Label(-text=>"Title: ")->grid(-row=>0,-column=>1);
-my $title_entry = $tf->Entry(-textvariable=>\$title,-font=>"normal",-bg=>"white",-width=>30,-justify=>"left")->grid(-row=>0,-column=>2,-columnspan=>3,-sticky=>"nw");
-$tf->Label(-text=>"Author: ")->grid(-row=>1,-column=>1);
-my $author_entry = $tf->Entry(-textvariable=>\$author,-font=>"normal",-bg=>"white",-width=>30,-justify=>"left")->grid(-row=>1,-column=>2,-columnspan=>3,-sticky=>"nw");
-$tf->Label(-text=>"Country: ")->grid(-row=>2,-column=>1);
-my $coa_entry = $tf->Entry(-textvariable=>\$coa,-font=>"normal",-bg=>"white",-width=>15,-justify=>"right")->grid(-row=>2,-column=>2,-sticky=>"nw");
-$tf->Label(-text=>"PPON: ")->grid(-row=>2,-column=>3);
-my $ppon_entry = $tf->Entry(-textvariable=>\$ppon,-font=>"normal",-bg=>"white",-width=>10,-justify=>"right")->grid(-row=>2,-column=>4,-sticky=>"nw");
-$tf->Label(-text=>"ISBN: ")->grid(-row=>3,-column=>1);
-my $isbn_entry = $tf->Entry(-textvariable=>\$isbn,-font=>"normal",-bg=>"white",-width=>14,-justify=>"right")->grid(-row=>3,-column=>2,-sticky=>"nw");
-$tf->Label(-text=>"Batch: ")->grid(-row=>3,-column=>3);
-my $batch_entry = $tf->Entry(-textvariable=>\$batch,-font=>"normal",-bg=>"white",-width=>11,-justify=>"right")->grid(-row=>3,-column=>4,-sticky=>"nw");
-$tf->Label(-text=>"No Dashes in ISBN")->grid(-row=>4,-column=>2);
-$tf->Label(-text=>"999/999R Format")->grid(-row=>4,-column=>4);
-$tf->Label(-text=>"Carton QTY: ")->grid(-row=>5,-column=>1);
-my $qty_entry = $tf->Entry(-textvariable=>\$qty,-font=>"normal",-bg=>"white",-width=>5,-justify=>"right")->grid(-row=>5,-column=>2,-sticky=>"nw");
-$tf->Label(-text=>"Carton WGT: ")->grid(-row=>5,-column=>3);
-my $wgt_entry = $tf->Entry(-textvariable=>\$wgt,-font=>"normal",-bg=>"white",-width=>5,-justify=>"right")->grid(-row=>5,-column=>4,-sticky=>"nw");
-$tf->Label(-text=>"Imprint: ")->grid(-row=>6,-column=>1);
-$tf->Optionmenu(-options=>[@pub_list],-variable=>\$publisher)->grid(-row=>6,-column=>2,-columnspan=>3,-sticky=>"ew");
-$tf->Checkbutton(-text=>"Also Create PNG image of PDF",-variable=>\$png,-relief=>'flat')->grid(-row=>7,-column=>1,-columnspan=>4);
+$tf->Label(-text=>"Title: ")->grid(-row=>$row,-column=>1);
+my $title_entry = $tf->Entry(-textvariable=>\$title,-font=>"normal",-bg=>"white",-width=>30,-justify=>"left")->grid(-row=>$row,-column=>2,-columnspan=>3,-sticky=>"nw");
+++$row;
+$tf->Label(-text=>"Author: ")->grid(-row=>$row,-column=>1);
+my $author_entry = $tf->Entry(-textvariable=>\$author,-font=>"normal",-bg=>"white",-width=>30,-justify=>"left")->grid(-row=>$row,-column=>2,-columnspan=>3,-sticky=>"nw");
+++$row;
+$tf->Label(-text=>"Country: ")->grid(-row=>$row,-column=>1);
+my $coa_entry = $tf->Entry(-textvariable=>\$coa,-font=>"normal",-bg=>"white",-width=>15,-justify=>"right")->grid(-row=>$row,-column=>2,-sticky=>"nw");
+$tf->Label(-text=>"PPON: ")->grid(-row=>$row,-column=>3);
+my $ppon_entry = $tf->Entry(-textvariable=>\$ppon,-font=>"normal",-bg=>"white",-width=>10,-justify=>"right")->grid(-row=>$row,-column=>4,-sticky=>"nw");
+++$row;
+$tf->Label(-text=>"ISBN: ")->grid(-row=>$row,-column=>1);
+my $isbn_entry = $tf->Entry(-textvariable=>\$isbn,-font=>"normal",-bg=>"white",-width=>14,-justify=>"right")->grid(-row=>$row,-column=>2,-sticky=>"nw");
+$tf->Label(-text=>"Batch: ")->grid(-row=>$row,-column=>3);
+my $batch_entry = $tf->Entry(-textvariable=>\$batch,-font=>"normal",-bg=>"white",-width=>11,-justify=>"right")->grid(-row=>$row,-column=>4,-sticky=>"nw");
+++$row;
+$tf->Checkbutton(-text=>"3-1-6-2-1 format, otherwise 3-1-5-3-1",-variable=>\$isbn_format,-relief=>'flat')->grid(-row=>$row,-column=>1,-columnspan=>2);
+$tf->Label(-text=>"999/999R Format")->grid(-row=>$row,-column=>4);
+++$row;
+$tf->Label(-text=>"Carton QTY: ")->grid(-row=>$row,-column=>1);
+my $qty_entry = $tf->Entry(-textvariable=>\$qty,-font=>"normal",-bg=>"white",-width=>5,-justify=>"right")->grid(-row=>$row,-column=>2,-sticky=>"nw");
+$tf->Label(-text=>"Carton WGT: ")->grid(-row=>$row,-column=>3);
+my $wgt_entry = $tf->Entry(-textvariable=>\$wgt,-font=>"normal",-bg=>"white",-width=>5,-justify=>"right")->grid(-row=>$row,-column=>4,-sticky=>"nw");
+++$row;
+$tf->Label(-text=>"Imprint: ")->grid(-row=>$row,-column=>1);
+$tf->Optionmenu(-options=>[@pub_list],-variable=>\$publisher)->grid(-row=>$row,-column=>2,-columnspan=>3,-sticky=>"ew");
+++$row;
+$tf->Checkbutton(-text=>"Also Create PNG image of PDF",-variable=>\$png,-relief=>'flat')->grid(-row=>$row,-column=>1,-columnspan=>4);
+
 
 #*****	Bottom Frame  ***************************
 my $bf = $window->Frame()->pack(-expand=>1,-fill=>"both");
@@ -172,9 +185,9 @@ sub create {
 
 #*****	Validate ISBN   *************************
 sub validate_isbn {
-#TODO strip out dashes, too.
+  $isbn =~ s/\-+//;
   $isbn =~ s/\s+//;
-  if ($isbn !~ /^\d{13}$/) {
+  if ($isbn !~ /^97(8|9)\d{10}$/) {
     $debug and print "Not a valid ISBN\n";
     $message = 'Not a good ISBN, I refuse to cooperate!';
 	return 0;
@@ -238,10 +251,20 @@ prCompress(1);
   prText(MYX,MYTOPY-30,"PUBLISHER: $publisher");
   prText(MYX,MYBOTY-30,"PUBLISHER: $publisher");
     # Country
+    if (length($publisher) > 25) {
+    $debug and print "Large imprint name\n";
+  prText(MYX+300,MYTOPY-34,"PRINTED IN ");
+  prText(MYX+300,MYBOTY-34,"PRINTED IN ");
+  prText(MYX+375,MYTOPY-34,uc($coa));
+  prText(MYX+375,MYBOTY-34,uc($coa));
+    }
+    else {
+    $debug and print "Regular imprint name\n";
   prText(MYX+260,MYTOPY-34,"PRINTED IN ");
   prText(MYX+260,MYBOTY-34,"PRINTED IN ");
   prText(MYX+335,MYTOPY-34,uc($coa));
   prText(MYX+335,MYBOTY-34,uc($coa));
+    }
     # ISBN
   prText(MYX,MYTOPY-63,'ISBN:');
   prText(MYX,MYBOTY-63,'ISBN:');
@@ -268,8 +291,14 @@ prCompress(1);
   prText(MYX,MYTOPY-190,"ISBN:");
   prText(MYX,MYBOTY-190,"ISBN:");
     my @broke = split(//,$isbn);
+    if ($isbn_format) {
+  prText(MYX+70,MYTOPY-190,sprintf ("%s%s%s-%s-%s%s%s%s%s%s-%s%s-%s",@broke));
+  prText(MYX+70,MYBOTY-190,sprintf ("%s%s%s-%s-%s%s%s%s%s%s-%s%s-%s",@broke));
+    }
+    else {
   prText(MYX+70,MYTOPY-190,sprintf ("%s%s%s-%s-%s%s%s%s%s-%s%s%s-%s",@broke));
   prText(MYX+70,MYBOTY-190,sprintf ("%s%s%s-%s-%s%s%s%s%s-%s%s%s-%s",@broke));
+    }
     # QTY
   prText(MYX,MYTOPY-124,"CTN QTY:");
   prText(MYX,MYBOTY-124,"CTN QTY:");
@@ -414,7 +443,6 @@ if ($png) {
   `convert -colorspace RGB -interlace none -density 300 -quality 100 -flatten ${pdf_output_file} ${pdf_output_file}.png`;
 }
 
-
 }
 
 #***** 	Quit 	*********************************
@@ -437,15 +465,18 @@ sub done {
 
 =item *
 B<perl-tk>
-Tk -- available from CPAN, but it's much easier to install using a package manager like C<sudo apt-get install perl-tk>.  If using Activestate Perl (on Windows) note that Tkx is installed, but this program requires pure Tk.  It may not be available in your version of Activestate.  OSX requires some extra tinkering to get a working X window to draw in - but it should prompt the user to install those parts as needed.
+Tk -- available from CPAN, but it's much easier to install using a package manager like C<sudo apt-get install perl-tk>.  If using Activestate Perl (on Windows) note that Tkx is installed, but this program requires pure Tk.  It may not be available in your version of Activestate (last known good version 5.12).  OSX requires some extra tinkering to get a working X window to draw in - but it should prompt the user to install those parts as needed.
 
 =item * 
 B<PDF::Reuse>
-This adds the data to the PDF form.  It uses three main font sizes, 14, 12, and 10, as noted in most guidelines.  
+This adds the data to the PDF form.  It uses three main sizes, 14, 12, and 10, as noted in most guidelines.  
 
 =item *
 B<PDF::Reuse::Barcode>
 This is what creates the barcodes to insert into the PDF.  It can do several kinds, but the label only needs CODE128 provided by B<Barcode::Code128>.  It won't export the 'FNC1' properly, however, so 'chr(0x07)' is used instead.  The author of PDF::Reuse::Barcode seemed shocked that anyone would need that...
+
+=item *
+B<convert> from Image Magick, to output both PDF and PNG of the carton labels.  A Korean printer had issues with the PDF version (I have no idea why), so if there are issues you can send both versions.  The PNG labels are slightly smaller, I'm not sure how to fix that.
 
 =back
 
@@ -453,10 +484,11 @@ This is what creates the barcodes to insert into the PDF.  It can do several kin
 
 The ISBN is converted into a GTIN by adding a 1, chopping off the last digit, and making a new checksum.  The price should be entered in as a batch (that may be specific to our partner), so $8.95 should be entered as 895R.  If it has a CAN price, it would be 895/995R.  However, only the US price is encoded in the barcode.  Add '-debug' to the command line to see some (kind-of) useful information about what's going on behind the scenes.
 
+I added a feature to change the ISBN hyphenation from the normal 3-1-5-3-1 to the less used 3-1-6-2-1 format, check the box for alternate format.
+
 =head3 TODO
 
-Validate input on entry to catch errors.  Add adjustments for generic usage.
-
+Validate input on entry to catch errors.  
 =head2 Author
 
   Anthony Burbank, 2016
@@ -464,19 +496,15 @@ Validate input on entry to catch errors.  Add adjustments for generic usage.
 =head1 License
 
 MIT License
-
 Copyright (c) 2017 Anthony Burbank
-
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
 in the Software without restriction, including without limitation the rights
 to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 copies of the Software, and to permit persons to whom the Software is
 furnished to do so, subject to the following conditions:
-
 The above copyright notice and this permission notice shall be included in all
 copies or substantial portions of the Software.
-
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -484,7 +512,6 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
 
 =cut
 
