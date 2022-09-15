@@ -16,7 +16,6 @@ use Switch;
 # The upper right corner of the page is X=530,Y=840
 # MYX = left to right position (both labels)
 # MYTOPY = top label up to down position
-# MYBOTY = bottom label up to down position
 # UPDATE!  Adjusted for 4x6 label
 use constant MYX => 2;
 use constant MYTOPY => 273;
