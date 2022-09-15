@@ -1,0 +1,500 @@
+#!/usr/bin/perl -s
+#
+#  Update 9/2022, this version makes a 4x6 page instead of using LETTER size 8.5x11
+#  Because raisins.
+
+
+use strict;
+use warnings;
+use PDF::Reuse;
+use PDF::Reuse::Barcode;
+use Spreadsheet::ParseExcel;
+use Switch;
+
+#*****	USE THIS TO ADJUST LABEL   **************
+# The bottom left corner of the page is X=0,Y=0
+# The upper right corner of the page is X=530,Y=840
+# MYX = left to right position (both labels)
+# MYTOPY = top label up to down position
+# MYBOTY = bottom label up to down position
+# UPDATE!  Adjusted for 4x6 label
+use constant MYX => 2;
+use constant MYTOPY => 273;
+use constant MYBOTY => 330;
+
+#*****	Base variables	*************************
+our $debug;
+our $row;
+my $isbn = '';
+my ($title, $author, $coa, $batch, $ppon, $vcode, $qty, $wgt);
+my ($adjusted_wgt, $adjusted_price, $adjusted_isbn);
+my ($can_price, $GTIN, $hr_price,$png);
+my $pdf_output_file = 'BISAC_Carton_Label.pdf';
+my $publisher = "YOUR PUBLISHER NAME HERE";        #TODO allow override in spreadsheet?
+my $message = "Ready to begin...";
+
+# AI SETTINGS *********************************************
+my $PPON_AI = "251";
+my $QTY_AI = "30";
+my $WGT_AI = "3401";
+my $PRICE_AI = "9012Q";
+my $GTIN_AI = "01";
+# *********************************************************
+
+my $filename = "sheet.xls";
+if (@ARGV) {
+  $filename = shift;
+}
+die "Can't find the file $filename!\n" unless -f $filename;
+
+# Open Excel document, first sheet only
+$debug and print "Starting ParseExcel\n";
+my $parser   = Spreadsheet::ParseExcel->new();
+$debug and print "Open Parser\n";
+my $workbook = $parser->Parse($filename);
+$debug and print "Workbook open\n";
+if ( !defined $workbook ) {
+  die $parser->error(), "\n";
+}
+my $worksheet = $workbook->worksheet(0);
+
+$debug and print "Worksheet Open\n";
+
+# Get sheet size
+my (undef, $col_max) = $worksheet->col_range();   #TODO this is fixed, why am I checking?
+my (undef, $row_max) = $worksheet->row_range();
+
+# XLS should be in the format:
+# Title, Author, Country, ISBN, Batch, PPON, Vendor Code, Carton QTY, Carton WGT, PNG
+
+for $row (1 .. $row_max) {
+  for my $col (0 .. $col_max) {
+    my $cell = $worksheet->get_cell( $row,$col);
+    next unless ($cell);
+    my $data = uc($cell->value());
+    $debug and print "$data\n";
+    # Remove any padding
+    $data =~ s/^\s+//;
+    $data =~ s/\s+$//;
+    $data =~ s/\x{2019}/'/g;	#replace RIGHT SINGLE QUOTATION MARK
+    switch($col) {
+	  case 0 { $title = $data}
+	  case 1 { $author = $data}
+	  case 2 { $coa = $data}
+	  case 3 { $isbn = $data}
+	  case 4 { $batch = $data}
+	  case 5 { $ppon = $data}
+      case 6 { $vcode = $data}
+	  case 7 { $qty = $data}
+	  case 8 { $wgt = $data}
+      case 9 {$data eq '' ? $png = 0 : $png = 1}
+	}
+  }
+my $output_file = $title;
+$output_file =~ s/[^[:alnum:]]//g;
+$output_file = substr $output_file, 0, 6;
+$pdf_output_file = $output_file . "_" . $row . ".pdf";
+$debug and print "$pdf_output_file\n";
+create();
+  undef $title;
+  undef $author;
+  undef $coa;
+  undef $isbn;
+  undef $batch;
+  undef $ppon;
+  undef $vcode;
+  undef $qty;
+  undef $wgt;
+  undef $adjusted_price;
+  undef $adjusted_wgt;
+  undef $hr_price;
+  undef $adjusted_isbn;
+  undef $can_price;
+  undef $GTIN;
+  undef $png;
+}
+
+#*****	Adjust BATCH to PRICE
+sub fix_price {
+  $can_price = '';
+  $batch = uc($batch);
+  # 0795R
+  if ($batch =~ /^(\d?\d\d\d)R$/) {
+    return $1;
+  }
+  # 0795/0895R
+  if ($batch =~ /(\d?\d\d\d)\/(\d?\d\d\d)R/) {
+	$can_price = $2;
+    return $1;
+  }
+  $debug and print "No viable PRICE found in $batch, defaulting to ZERO\n";
+  print "*** Not a good BATCH, resorting to \$0.00 on row after " . $row . " ***\n";
+  return '0';
+}
+
+#*****	Make the PDF   **************************
+sub create {
+# TODO stop if invalid data
+  $debug and print "Creating PDF\n";
+  # Fix PRICE/BATCH
+  $adjusted_price = fix_price();
+  $hr_price = '$' . sprintf("%.2f",$adjusted_price/100) . " USD";
+  if ($can_price) {
+    $hr_price = $hr_price . ' / $' . sprintf("%.2f",$can_price/100) . ' CAD';
+  }
+  $adjusted_price .= 'USD';
+  # Fix GTIN
+  $GTIN = validate_isbn();
+  print "Not Vaid ISBN\n" unless $GTIN > 0;
+  return 0 unless $GTIN > 0;
+  # Fix WGT
+  print "Enter a weight for $isbn\n" unless $wgt;
+  return 0 unless $wgt;
+  $wgt =~ s/\s+//g;
+  $adjusted_wgt = $wgt;
+  $adjusted_wgt *= 10;
+  $adjusted_wgt = sprintf("%06d", $adjusted_wgt);
+
+  if (!$vcode) {
+   $vcode = " ";
+  }
+
+  $debug and print "P: $adjusted_price -- $hr_price\n";
+  $debug and print "W: $adjusted_wgt\n";
+  if (defined $pdf_output_file) {
+    $debug and print "Saving to $pdf_output_file, starting REUSE\n";
+    $message = "Carton Label saved as $pdf_output_file";
+    make_pdf();
+  }
+  else {
+    $debug and print "No label file name set for output!\n";
+  }
+
+}
+
+#*****	Validate ISBN   *************************
+sub validate_isbn {
+  $isbn =~ s/\-+//g;
+  $isbn =~ s/\s+//g;
+  if ($isbn !~ /^97(8|9)\d{10}$/) {
+    $debug and print "Not a valid ISBN: $isbn\n";
+    $message = 'Not a good ISBN, I refuse to cooperate!';
+	return 0;
+  }
+  else {
+    $isbn = verify_ISBN($isbn);
+    $debug and print "ISBN: Working with $isbn\n";
+    my $GTIN = '1' . $isbn;
+    chop ($GTIN);
+    $GTIN .= checksum($GTIN);
+    $debug and print "GTIN: Working with $GTIN\n";
+    return $GTIN;
+  }
+}
+
+
+#*****	GTIN-14 Checksum    *********************
+sub checksum() {
+  my $data = shift;
+  my $is_even = 0;
+  my $subtotal = 0;
+  for my $d (split //, $data) {
+    if (!$is_even) {
+	  $d = $d*3;
+      $is_even = 1;
+    }
+    else {
+      $is_even = 0;
+    }
+  $subtotal += $d;
+  }
+  my $checkdigit = $subtotal % 10;
+  $checkdigit = 10-$checkdigit;
+  if ($checkdigit == 10) {
+    $checkdigit = 0;
+  }
+  return $checkdigit;
+}
+
+#*****  ISBN-13 Checksum    *********************
+# this silently corrects bad checksums
+sub verify_ISBN {
+  my $visbn = shift;
+  return unless ($visbn =~ /97\d{11}/);
+  $debug and print "Starting ISBN checkdigit on $visbn\n";
+  my $part_isbn = substr($visbn,0,12);
+  my $checkdigit = 0;
+  my $multi     = 1;
+  foreach my $i (split //, $part_isbn) {
+    if ($multi == 1) {
+      $checkdigit += $i;
+      $multi = 2;
+    }
+    else {
+      $checkdigit += ($i * 3);
+      $multi = 1;
+    }
+  }
+  my $check = $checkdigit % 10;
+  $check = 10 - $check;
+  if ($check == 10) {
+    $check = 0;
+  }
+  my $correct_isbn = $part_isbn . $check;
+  if ($visbn == $correct_isbn) {
+    $debug and print "Correct checksum\n";
+  }
+  else {
+    print "ISBN corrected!  Please check $correct_isbn!\n";
+  }
+  return $part_isbn . $check;
+}
+
+
+#*****	Write data to the PDF     ***************
+sub make_pdf {
+prFile($pdf_output_file);
+#1 inch = 72 point, this shoudl be 4x6 label
+prMbox(0,0,432,288);
+prFont('H');
+prCompress(1);
+
+  # Title Text
+  prFontSize(14);
+  prText(MYX,MYTOPY,"TITLE:");
+
+  prText(MYX+50,MYTOPY,uc($title));
+
+ 
+  # Main Text
+  prFontSize(12);
+    # Author
+  prText(MYX,MYTOPY-15,"AUTHOR:");
+
+  prText(MYX+65,MYTOPY-15,uc($author));
+
+    # Publisher
+  prText(MYX,MYTOPY-30,"PUBLISHER: $publisher");
+ 
+    # Country
+  prText(MYX+260,MYTOPY-34,"PRINTED IN ");
+
+  prText(MYX+335,MYTOPY-34,uc($coa));
+
+    # ISBN
+  prText(MYX,MYTOPY-63,'ISBN:');
+
+  prText(MYX+35,MYTOPY-63,$isbn);
+ 
+    # Batch
+  prText(MYX,MYTOPY-83,"BATCH:");
+
+  prText(MYX+47,MYTOPY-83,$batch);
+
+    # PPON and PUB/VER code (as one unit)
+  prText(MYX+270,MYTOPY-63,"PPON:");
+ 
+  prText(MYX+310,MYTOPY-63,$ppon  . " " . $vcode);
+
+    # Cover Price, Switching fonts to save space
+  prText(MYX+206,MYTOPY-200,"COVER PRICE:");
+
+  prFont('TR');
+  prText(MYX+296,MYTOPY-200,$hr_price);
+
+  prFont('H');
+  # re-add dashes to ISBN-13 field
+  prText(MYX,MYTOPY-200,"ISBN:");
+
+    my @broke = split(//,$isbn);
+  prText(MYX+70,MYTOPY-200,sprintf ("%s%s%s-%s-%s%s%s%s%s-%s%s%s-%s",@broke));
+ 
+    # QTY
+  prText(MYX,MYTOPY-124,"CTN QTY:");
+ 
+  prText(MYX+80,MYTOPY-124,$qty);
+
+    # WGT
+  prText(MYX+250,MYTOPY-124,"CTN WGT:");
+ 
+  prText(MYX+320,MYTOPY-124,sprintf("%.1f",$wgt) . ' LBS');
+ 
+
+  # HR Text (sub barcode)
+  prFontSize(10);
+  prText(MYX+15,MYTOPY-250,"($GTIN_AI) $GTIN");
+
+  prText(MYX+300,MYTOPY-100,"($PPON_AI) $ppon" . " $vcode");
+
+  prText(MYX+14,MYTOPY-170,"($QTY_AI) $qty");
+
+  prText(MYX+260,MYTOPY-170,"($WGT_AI) $adjusted_wgt");
+
+  prText(MYX+220,MYTOPY-250,"($PRICE_AI) $adjusted_price");
+ 
+
+  # Barcode EAN
+  prFontSize(14);
+  prFont('HB');
+  prText(MYX+170,MYTOPY-61,'BARCODE');
+  prFontSize(35);
+  prText(MYX+170,MYTOPY-89,"EAN");
+  prFontSize(14);
+  prFont('HB');
+  
+
+  # Lines - box around each label made up of 4 connected lines
+    # Top Box
+  prAdd('q ' . (MYX-5) . ' ' . (MYTOPY+20) . ' m ' . (MYX+440) . ' ' . (MYTOPY+20) . ' l S Q');
+  prAdd('q ' . (MYX-5) . ' ' . (MYTOPY+20) . ' m ' . (MYX-5) . ' ' . (MYTOPY-280) . ' l S Q');
+  prAdd('q ' . (MYX-5) . ' ' . (MYTOPY-280) . ' m ' . (MYX+440) . ' ' . (MYTOPY-280) . ' l S Q');
+  prAdd('q ' . (MYX+440) . ' ' . (MYTOPY-280) . ' m ' . (MYX+440) . ' ' . (MYTOPY+20) . ' l S Q');
+
+   # Segment Breaks
+  prAdd('q ' . (MYX-5) . ' ' . (MYTOPY-44) . ' m ' . (MYX+440) . ' ' . (MYTOPY-44) . ' l S Q');
+
+  prAdd('q ' . (MYX-5) . ' ' . (MYTOPY-110) . ' m ' . (MYX+440) . ' ' . (MYTOPY-110) . ' l S Q');
+
+
+
+
+  ## GTIN14
+  PDF::Reuse::Barcode::Code128(x     => MYX+5,
+                               y     => MYTOPY-250,
+                               value => chr(0xf7) . $GTIN_AI . $GTIN,
+                               text  => 0,
+	                           size  => 1.3,
+                               drawBackground => 0,
+							   prolong => 1.5 );
+
+  # PPON
+  # Fix for non-standard PPON (letters)
+#  if ($ppon =~ /\D+/) {
+  # Compressed format - 12 alphanum max
+  $debug and print "Found a non-standard PPON, switching to compressed format\n";
+  PDF::Reuse::Barcode::Code128(x     => MYX+254,
+                               y     => MYTOPY-95,
+                               value => chr(0xf7) . $PPON_AI . $ppon . " " . $vcode,
+                               text  => 0,
+							   size  => 1,
+							   drawBackground => 0 );
+
+
+
+# QTY
+  PDF::Reuse::Barcode::Code128(x     => MYX+4,
+                               y     => MYTOPY-170,
+                               value => chr(0xf7) . $QTY_AI . $qty,
+                               text  => 0,
+							   size  => 1.2,
+							   drawBackground => 0,
+							   prolong => 1.5 );
+
+
+# WGT
+  PDF::Reuse::Barcode::Code128(x     => MYX+250,
+                               y     => MYTOPY-170,
+                               value => chr(0xf7) . $WGT_AI . $adjusted_wgt,
+                               text  => 0,
+							   size  => 1.2,
+							   drawBackground => 0,
+							   prolong => 1.5 );
+
+
+# PRICE
+  PDF::Reuse::Barcode::Code128(x     => MYX+208,
+                               y     => MYTOPY-250,
+                               value => chr(0xf7) . $PRICE_AI . $adjusted_price,
+                               text  => 0,
+							   size  => 1.3,
+							   drawBackground => 0,
+							   prolong => 1.5 );
+
+
+prEnd ();
+
+if ($png) {
+  $debug and print "Converting PDF into PNG... this may take a little bit\n";
+  `convert -colorspace RGB -interlace none -density 300 -quality 100 -flatten ${pdf_output_file} ${pdf_output_file}.png`;
+}
+
+}
+
+
+=head1 Name
+
+  BC_xls (standalone)
+
+=head1 Synopsys
+
+  Generate BISAC (or BISG) carton labels from a spreadsheet (batch conversion)
+
+=head2 Required Modules
+
+=over 4
+
+=item * 
+B<PDF::Reuse>
+This adds the data to the PDF form.  It uses three main sizes, 14, 12, and 10, as noted in most guidelines.  
+
+=item *
+B<PDF::Reuse::Barcode>
+This is what creates the barcodes to insert into the PDF.  It can do several kinds, but the label only needs CODE128 provided by B<Barcode::Code128>.  It won't export the 'FNC1' properly, however, so 'chr(0x07)' is used instead.  The author of PDF::Reuse::Barcode seemed shocked that anyone would need that...
+
+=item *
+B<Spreadsheet::ParseExcel>
+This version only works with XLS type files.  Someday, I hope to harness the power of XLSX (or maybe CSV_XS) to make it more versitile.
+
+=item *
+B<Switch>
+Because of all the things Perl can do, SWITCH/CASE is not one.  Install by hand to add in core feature.
+
+=item *
+B<convert>
+If you want to make PNG images of the PDFs, you'll need F<convert> from the Imagemagick package
+
+=back
+
+=head2 Notes
+
+The ISBN is converted into a GTIN by adding a 1, chopping off the last digit, and making a new checksum.  The price should be entered in as a batch (that may be specific to our partner), so $8.95 should be entered as 895R.  If it has a CAN price, it would be 895/995R.  However, only the US price is encoded in the barcode.  Add '-debug' to the command line to see some (kind-of) useful information about what's going on behind the scenes.
+
+This version is for scripting [use BC_tk for the (kind-of) GUI version], it expects an XLS spreadsheet and will return a batch of PDF labels if everything went well.  If you don't supply a file name it will look for F<sheet.xls> 
+
+Updated 8/2018 to allow non-standard PPONs that include letters and symbols so it won't spill outside the box
+
+Updated 08/2021 new spec required, Vendor Code and print number appended to PPON (text only - not in barcode)
+
+=head3 TODO
+
+Validate input on entry to catch errors.  Add adjustments for generic usage.  Allow lower case in PPON exceptions (redundant UC everywhere!)
+
+=head2 Author
+
+  Anthony Burbank, 2017, 2022 update
+
+=head1 License
+
+MIT License
+
+Copyright (c) 2022 Anthony Burbank
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+=cut
+
