@@ -7,7 +7,7 @@ Requires:
  
 Notes:
 
-   Carton_Tk is the GUI version, Carton_xls is the batch conversion script.  If you're doing one label, try the GUI version.  Otherwise, use the Carton_xls_template.xls file to create a batch job.
+   Carton_Tk is the GUI version, Carton_xls (and Updated_Carton_xls and Carton_4x6) is the batch conversion script.  If you're doing one label, try the GUI version.  Otherwise, use the Carton_xls_template.xls file to create a batch job.
    
 This may contain specific parts for a certain Distribution house and require adjustment for your use.  You should edit both files and change "my $publisher= " to a valid name.
  
