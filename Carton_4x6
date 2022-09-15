@@ -20,7 +20,6 @@ use Switch;
 # UPDATE!  Adjusted for 4x6 label
 use constant MYX => 2;
 use constant MYTOPY => 273;
-use constant MYBOTY => 330;
 
 #*****	Base variables	*************************
 our $debug;
