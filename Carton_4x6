@@ -16,9 +16,11 @@ use Switch;
 # The upper right corner of the page is X=530,Y=840
 # MYX = left to right position (both labels)
 # MYTOPY = top label up to down position
+# MYBOTY = bottom label up to down position
 # UPDATE!  Adjusted for 4x6 label
-use constant MYX => 2;
+use constant MYX => 13;
 use constant MYTOPY => 273;
+use constant MYBOTY => 330;
 
 #*****	Base variables	*************************
 our $debug;
@@ -82,10 +84,10 @@ for $row (1 .. $row_max) {
 	  case 3 { $isbn = $data}
 	  case 4 { $batch = $data}
 	  case 5 { $ppon = $data}
-      	  case 6 { $vcode = $data}
+      case 6 { $vcode = $data}
 	  case 7 { $qty = $data}
 	  case 8 { $wgt = $data}
-          case 9 {$data eq '' ? $png = 0 : $png = 1}
+      case 9 {$data eq '' ? $png = 0 : $png = 1}
 	}
   }
 my $output_file = $title;
@@ -138,7 +140,7 @@ sub create {
   $adjusted_price = fix_price();
   $hr_price = '$' . sprintf("%.2f",$adjusted_price/100) . " USD";
   if ($can_price) {
-    $hr_price = $hr_price . ' / $' . sprintf("%.2f",$can_price/100) . ' CAD';
+    $hr_price = $hr_price . '/$' . sprintf("%.2f",$can_price/100) . ' CAD';
   }
   $adjusted_price .= 'USD';
   # Fix GTIN
@@ -290,15 +292,15 @@ prCompress(1);
   prText(MYX+47,MYTOPY-83,$batch);
 
     # PPON and PUB/VER code (as one unit)
-  prText(MYX+270,MYTOPY-63,"PPON:");
+  prText(MYX+250,MYTOPY-63,"PPON:");
  
-  prText(MYX+310,MYTOPY-63,$ppon  . " " . $vcode);
+  prText(MYX+290,MYTOPY-63,$ppon  . " " . $vcode);
 
     # Cover Price, Switching fonts to save space
-  prText(MYX+206,MYTOPY-200,"COVER PRICE:");
+  prText(MYX+203,MYTOPY-200,"COVER PRICE:");
 
   prFont('TR');
-  prText(MYX+296,MYTOPY-200,$hr_price);
+  prText(MYX+292,MYTOPY-200,$hr_price);
 
   prFont('H');
   # re-add dashes to ISBN-13 field
@@ -313,47 +315,38 @@ prCompress(1);
   prText(MYX+80,MYTOPY-124,$qty);
 
     # WGT
-  prText(MYX+250,MYTOPY-124,"CTN WGT:");
+  prText(MYX+240,MYTOPY-124,"CTN WGT:");
  
-  prText(MYX+320,MYTOPY-124,sprintf("%.1f",$wgt) . ' LBS');
+  prText(MYX+310,MYTOPY-124,sprintf("%.1f",$wgt) . ' LBS');
  
 
   # HR Text (sub barcode)
   prFontSize(10);
   prText(MYX+15,MYTOPY-250,"($GTIN_AI) $GTIN");
 
-  prText(MYX+300,MYTOPY-100,"($PPON_AI) $ppon" . " $vcode");
+  prText(MYX+250,MYTOPY-96,"($PPON_AI) $ppon" . " $vcode");
 
   prText(MYX+14,MYTOPY-170,"($QTY_AI) $qty");
 
-  prText(MYX+260,MYTOPY-170,"($WGT_AI) $adjusted_wgt");
+  prText(MYX+250,MYTOPY-170,"($WGT_AI) $adjusted_wgt");
 
-  prText(MYX+220,MYTOPY-250,"($PRICE_AI) $adjusted_price");
+  prText(MYX+205,MYTOPY-250,"($PRICE_AI) $adjusted_price");
  
 
   # Barcode EAN
   prFontSize(14);
   prFont('HB');
-  prText(MYX+170,MYTOPY-61,'BARCODE');
+  prText(MYX+158,MYTOPY-62,'BARCODE');
   prFontSize(35);
-  prText(MYX+170,MYTOPY-89,"EAN");
+  prText(MYX+157,MYTOPY-90,"EAN");
   prFontSize(14);
   prFont('HB');
   
-
-  # Lines - box around each label made up of 4 connected lines
-    # Top Box
-  prAdd('q ' . (MYX-5) . ' ' . (MYTOPY+20) . ' m ' . (MYX+440) . ' ' . (MYTOPY+20) . ' l S Q');
-  prAdd('q ' . (MYX-5) . ' ' . (MYTOPY+20) . ' m ' . (MYX-5) . ' ' . (MYTOPY-280) . ' l S Q');
-  prAdd('q ' . (MYX-5) . ' ' . (MYTOPY-280) . ' m ' . (MYX+440) . ' ' . (MYTOPY-280) . ' l S Q');
-  prAdd('q ' . (MYX+440) . ' ' . (MYTOPY-280) . ' m ' . (MYX+440) . ' ' . (MYTOPY+20) . ' l S Q');
 
    # Segment Breaks
   prAdd('q ' . (MYX-5) . ' ' . (MYTOPY-44) . ' m ' . (MYX+440) . ' ' . (MYTOPY-44) . ' l S Q');
 
   prAdd('q ' . (MYX-5) . ' ' . (MYTOPY-110) . ' m ' . (MYX+440) . ' ' . (MYTOPY-110) . ' l S Q');
-
-
 
 
   ## GTIN14
@@ -370,7 +363,7 @@ prCompress(1);
 #  if ($ppon =~ /\D+/) {
   # Compressed format - 12 alphanum max
   $debug and print "Found a non-standard PPON, switching to compressed format\n";
-  PDF::Reuse::Barcode::Code128(x     => MYX+254,
+  PDF::Reuse::Barcode::Code128(x     => MYX+240,
                                y     => MYTOPY-95,
                                value => chr(0xf7) . $PPON_AI . $ppon . " " . $vcode,
                                text  => 0,
@@ -390,7 +383,7 @@ prCompress(1);
 
 
 # WGT
-  PDF::Reuse::Barcode::Code128(x     => MYX+250,
+  PDF::Reuse::Barcode::Code128(x     => MYX+240,
                                y     => MYTOPY-170,
                                value => chr(0xf7) . $WGT_AI . $adjusted_wgt,
                                text  => 0,
@@ -400,7 +393,7 @@ prCompress(1);
 
 
 # PRICE
-  PDF::Reuse::Barcode::Code128(x     => MYX+208,
+  PDF::Reuse::Barcode::Code128(x     => MYX+192,
                                y     => MYTOPY-250,
                                value => chr(0xf7) . $PRICE_AI . $adjusted_price,
                                text  => 0,
@@ -461,7 +454,9 @@ This version is for scripting [use BC_tk for the (kind-of) GUI version], it expe
 
 Updated 8/2018 to allow non-standard PPONs that include letters and symbols so it won't spill outside the box
 
-Updated 08/2021 new spec required, Vendor Code and print number appended to PPON (text only - not in barcode)
+Updated 08/2021 new spec required, Vendor Code and print number appended to PPON
+
+Updated 09/2022 Change from 8.5x11 to 4x6 for vendor. 
 
 =head3 TODO
 
@@ -469,13 +464,13 @@ Validate input on entry to catch errors.  Add adjustments for generic usage.  Al
 
 =head2 Author
 
-  Anthony Burbank, 2017, 2022 update
+  Anthony Burbank, 2017
 
 =head1 License
 
 MIT License
 
-Copyright (c) 2022 Anthony Burbank
+Copyright (c) 2017 Anthony Burbank
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -493,6 +488,4 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-
 =cut
-
