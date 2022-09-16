@@ -84,10 +84,10 @@ for $row (1 .. $row_max) {
 	  case 3 { $isbn = $data}
 	  case 4 { $batch = $data}
 	  case 5 { $ppon = $data}
-      case 6 { $vcode = $data}
+          case 6 { $vcode = $data}
 	  case 7 { $qty = $data}
 	  case 8 { $wgt = $data}
-      case 9 {$data eq '' ? $png = 0 : $png = 1}
+          case 9 {$data eq '' ? $png = 0 : $png = 1}
 	}
   }
 my $output_file = $title;
